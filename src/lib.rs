@@ -37,7 +37,7 @@ pub struct CompareAndSwapError {
     pub proposed: Option<Py<PyBytes>>,
 }
 
-#[pyclass]
+#[pyclass(subclass)]
 pub struct SledDb {
     inner: Db,
 }
@@ -133,14 +133,6 @@ impl SledDb {
         to_bytes(self.inner.name())
     }
 
-    pub fn contains_key(&self, key: &[u8]) -> PyResult<bool> {
-        self.inner.contains_key(key).map_err(to_pyerr)
-    }
-
-    pub fn len(&self) -> usize {
-        self.inner.len()
-    }
-
     pub fn open_tree(&self, name: &[u8]) -> PyResult<SledTree> {
         match self.inner.open_tree(name) {
             Ok(tree) => Ok(SledTree { inner: tree }),
@@ -157,7 +149,7 @@ impl SledDb {
     }
 }
 
-#[pyclass(mapping)]
+#[pyclass(subclass, mapping)]
 pub struct SledTree {
     inner: Tree,
 }
