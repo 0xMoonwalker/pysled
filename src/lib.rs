@@ -19,7 +19,7 @@ fn to_bytes(vec: IVec) -> Py<PyBytes> {
 }
 
 fn to_maybe_bytes(maybe_vec: Option<IVec>) -> Option<Py<PyBytes>> {
-    Python::with_gil(|py| maybe_vec.map(|v| PyBytes::new(py, &v).into()))
+    maybe_vec.map(to_bytes)
 }
 
 fn to_maybe_bytes_result(res: Result<Option<IVec>, sled::Error>) -> PyResult<Option<Py<PyBytes>>> {
@@ -73,13 +73,11 @@ macro_rules! add_tree_methods {
             new: Option<Vec<u8>>,
         ) -> PyResult<Option<CompareAndSwapError>> {
             match self.inner.compare_and_swap(key, old, new) {
-                Ok(e) => match e {
-                    Ok(_) => Ok(None),
-                    Err(i) => Ok(Some(CompareAndSwapError {
-                        current: i.current.map(to_bytes),
-                        proposed: i.proposed.map(to_bytes),
-                    })),
-                },
+                Ok(Ok(_)) => Ok(None),
+                Ok(Err(i)) => Ok(Some(CompareAndSwapError {
+                    current: i.current.map(to_bytes),
+                    proposed: i.proposed.map(to_bytes),
+                })),
                 Err(err) => Err(to_pyerr(err)),
             }
         }
@@ -129,9 +127,10 @@ impl SledDb {
 
     #[new]
     pub fn new(path: PathBuf) -> PyResult<Self> {
-        let inner = sled::open(&path)
-            .map_err(|e| PyValueError::new_err(format!("Failed to open db: {}", e)))?;
-        Ok(Self { inner })
+        match sled::open(&path) {
+            Ok(inner) => Ok(Self { inner }),
+            Err(err) => Err(PyValueError::new_err(format!("Failed to open db: {}", err))),
+        }
     }
 
     pub fn open_tree(&self, name: &[u8]) -> PyResult<SledTree> {
