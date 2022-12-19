@@ -37,6 +37,87 @@ pub struct CompareAndSwapError {
     pub proposed: Option<Py<PyBytes>>,
 }
 
+macro_rules! add_tree_methods {
+    () => {
+        pub fn insert(&self, key: &[u8], value: Vec<u8>) -> PyResult<Option<Py<PyBytes>>> {
+            to_maybe_bytes_result(self.inner.insert(key, value))
+        }
+
+        pub fn get(&self, key: &[u8]) -> PyResult<Option<Py<PyBytes>>> {
+            to_maybe_bytes_result(self.inner.get(key))
+        }
+
+        pub fn remove(&self, key: &[u8]) -> PyResult<Option<Py<PyBytes>>> {
+            to_maybe_bytes_result(self.inner.remove(key))
+        }
+
+        pub fn clear(&self) -> PyResult<()> {
+            self.inner.clear().map_err(to_pyerr)
+        }
+
+        pub fn all(&self) -> PyResult<Vec<(Py<PyBytes>, Py<PyBytes>)>> {
+            let mut out = Vec::new();
+            let iter = self.inner.iter();
+            out.reserve(iter.size_hint().0);
+            for e in iter {
+                let (a, b) = e.map_err(to_pyerr)?;
+                out.push((to_bytes(a), to_bytes(b)));
+            }
+            Ok(out)
+        }
+
+        pub fn compare_and_swamp(
+            &self,
+            key: &[u8],
+            old: Option<&[u8]>,
+            new: Option<Vec<u8>>,
+        ) -> PyResult<Option<CompareAndSwapError>> {
+            match self.inner.compare_and_swap(key, old, new) {
+                Ok(e) => match e {
+                    Ok(_) => Ok(None),
+                    Err(i) => Ok(Some(CompareAndSwapError {
+                        current: i.current.map(to_bytes),
+                        proposed: i.proposed.map(to_bytes),
+                    })),
+                },
+                Err(err) => Err(to_pyerr(err)),
+            }
+        }
+
+        pub fn checksum(&self) -> PyResult<u32> {
+            self.inner.checksum().map_err(to_pyerr)
+        }
+
+        pub fn flush(&self) -> PyResult<usize> {
+            self.inner.flush().map_err(to_pyerr)
+        }
+
+        pub fn is_empty(&self) -> bool {
+            self.inner.is_empty()
+        }
+
+        pub fn __len__(&self) -> usize {
+            self.inner.len()
+        }
+
+        pub fn __contains__(&self, key: &[u8]) -> PyResult<bool> {
+            self.inner.contains_key(key).map_err(to_pyerr)
+        }
+
+        pub fn __getitem__(&self, key: &[u8]) -> PyResult<Option<Py<PyBytes>>> {
+            self.get(key)
+        }
+
+        pub fn __setitem__(&self, key: &[u8], value: Vec<u8>) -> PyResult<()> {
+            self.insert(key, value).map(|_| ())
+        }
+
+        pub fn __delitem__(&self, key: &[u8]) -> PyResult<()> {
+            self.remove(key).map(|_| ())
+        }
+    };
+}
+
 #[pyclass(subclass)]
 pub struct SledDb {
     inner: Db,
@@ -44,6 +125,8 @@ pub struct SledDb {
 
 #[pymethods]
 impl SledDb {
+    add_tree_methods!();
+
     #[new]
     pub fn new(path: PathBuf) -> PyResult<Self> {
         let inner = sled::open(&path)
@@ -51,92 +134,10 @@ impl SledDb {
         Ok(Self { inner })
     }
 
-    pub fn insert(&self, key: &[u8], value: Vec<u8>) -> PyResult<Option<Py<PyBytes>>> {
-        to_maybe_bytes_result(self.inner.insert(key, value))
-    }
-
-    pub fn get(&self, key: &[u8]) -> PyResult<Option<Py<PyBytes>>> {
-        to_maybe_bytes_result(self.inner.get(key))
-    }
-
-    pub fn remove(&self, key: &[u8]) -> PyResult<Option<Py<PyBytes>>> {
-        to_maybe_bytes_result(self.inner.remove(key))
-    }
-
-    pub fn clear(&self) -> PyResult<()> {
-        self.inner.clear().map_err(to_pyerr)
-    }
-
-    pub fn all(&self) -> PyResult<Vec<(Py<PyBytes>, Py<PyBytes>)>> {
-        let mut out = Vec::new();
-        let iter = self.inner.iter();
-        out.reserve(iter.size_hint().0);
-        for e in iter {
-            let (a, b) = e.map_err(to_pyerr)?;
-            out.push((to_bytes(a), to_bytes(b)));
-        }
-        Ok(out)
-    }
-
-    pub fn compare_and_swamp(
-        &self,
-        key: &[u8],
-        old: Option<&[u8]>,
-        new: Option<Vec<u8>>,
-    ) -> PyResult<Option<CompareAndSwapError>> {
-        match self.inner.compare_and_swap(key, old, new) {
-            Ok(e) => { match e {
-                Ok(_) => Ok(None),
-                Err(i) => Ok(Some(CompareAndSwapError{
-                    current: i.current.map(to_bytes),
-                    proposed: i.proposed.map(to_bytes),
-                }))
-            }},
-            Err(err) => Err(to_pyerr(err))
-        }
-    }
-
-    pub fn checksum(&self) -> PyResult<u32> {
-        self.inner.checksum().map_err(to_pyerr)
-    }
-
-    pub fn flush(&self) -> PyResult<usize> {
-        self.inner.flush().map_err(to_pyerr)
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.inner.is_empty()
-    }
-
-    pub fn __len__(&self) -> usize {
-        self.inner.len()
-    }
-
-    pub fn __contains__(&self, key: &[u8]) -> PyResult<bool> {
-        self.inner.contains_key(key).map_err(to_pyerr)
-    }
-
-    pub fn __getitem__(&self, key: &[u8]) -> PyResult<Option<Py<PyBytes>>> {
-        self.get(key)
-    }
-
-    pub fn __setitem__(&self, key: &[u8], value: Vec<u8>) -> PyResult<()> {
-        self.insert(key, value).map(|_| ())
-    }
-
-    pub fn __delitem__(&self, key: &[u8]) -> PyResult<()> {
-        self.remove(key).map(|_| ())
-    }
-
-    #[getter]
-    pub fn name(&self) -> Py<PyBytes> {
-        to_bytes(self.inner.name())
-    }
-
     pub fn open_tree(&self, name: &[u8]) -> PyResult<SledTree> {
         match self.inner.open_tree(name) {
             Ok(tree) => Ok(SledTree { inner: tree }),
-            Err(err) => Err(to_pyerr(err))
+            Err(err) => Err(to_pyerr(err)),
         }
     }
 
@@ -147,6 +148,11 @@ impl SledDb {
     pub fn size_on_disk(&self) -> PyResult<u64> {
         self.inner.size_on_disk().map_err(to_pyerr)
     }
+
+    #[getter]
+    pub fn name(&self) -> Py<PyBytes> {
+        to_bytes(self.inner.name())
+    }
 }
 
 #[pyclass(subclass, mapping)]
@@ -156,82 +162,7 @@ pub struct SledTree {
 
 #[pymethods]
 impl SledTree {
-     pub fn insert(&self, key: &[u8], value: Vec<u8>) -> PyResult<Option<Py<PyBytes>>> {
-        to_maybe_bytes_result(self.inner.insert(key, value))
-    }
-
-    pub fn get(&self, key: &[u8]) -> PyResult<Option<Py<PyBytes>>> {
-        to_maybe_bytes_result(self.inner.get(key))
-    }
-
-    pub fn remove(&self, key: &[u8]) -> PyResult<Option<Py<PyBytes>>> {
-        to_maybe_bytes_result(self.inner.remove(key))
-    }
-
-    pub fn clear(&self) -> PyResult<()> {
-        self.inner.clear().map_err(to_pyerr)
-    }
-
-    pub fn all(&self) -> PyResult<Vec<(Py<PyBytes>, Py<PyBytes>)>> {
-        let mut out = Vec::new();
-        let iter = self.inner.iter();
-        out.reserve(iter.size_hint().0);
-        for e in iter {
-            let (a, b) = e.map_err(to_pyerr)?;
-            out.push((to_bytes(a), to_bytes(b)));
-        }
-        Ok(out)
-    }
-
-    pub fn compare_and_swamp(
-        &self,
-        key: &[u8],
-        old: Option<&[u8]>,
-        new: Option<Vec<u8>>,
-    ) -> PyResult<Option<CompareAndSwapError>> {
-        match self.inner.compare_and_swap(key, old, new) {
-            Ok(e) => { match e {
-                Ok(_) => Ok(None),
-                Err(i) => Ok(Some(CompareAndSwapError{
-                    current: i.current.map(to_bytes),
-                    proposed: i.proposed.map(to_bytes),
-                }))
-            }},
-            Err(err) => Err(to_pyerr(err))
-        }
-    }
-
-    pub fn checksum(&self) -> PyResult<u32> {
-        self.inner.checksum().map_err(to_pyerr)
-    }
-
-    pub fn flush(&self) -> PyResult<usize> {
-        self.inner.flush().map_err(to_pyerr)
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.inner.is_empty()
-    }
-
-    pub fn __len__(&self) -> usize {
-        self.inner.len()
-    }
-
-    pub fn __contains__(&self, key: &[u8]) -> PyResult<bool> {
-        self.inner.contains_key(key).map_err(to_pyerr)
-    }
-
-    pub fn __getitem__(&self, key: &[u8]) -> PyResult<Option<Py<PyBytes>>> {
-        self.get(key)
-    }
-
-    pub fn __setitem__(&self, key: &[u8], value: Vec<u8>) -> PyResult<()> {
-        self.insert(key, value).map(|_| ())
-    }
-
-    pub fn __delitem__(&self, key: &[u8]) -> PyResult<()> {
-        self.remove(key).map(|_| ())
-    }
+    add_tree_methods!();
 
     #[getter]
     pub fn name(&self) -> Py<PyBytes> {
