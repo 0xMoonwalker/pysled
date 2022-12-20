@@ -161,7 +161,7 @@ impl_tree_methods!(SledDb);
 impl SledDb {
     #[new]
     pub fn new(path: PathBuf) -> PyResult<Self> {
-        match sled::open(&path) {
+        match sled::open(path) {
             Ok(inner) => Ok(Self { inner }),
             Err(err) => Err(PyValueError::new_err(format!("Failed to open db: {}", err))),
         }
