@@ -45,17 +45,17 @@ def test_contains(db):
     contains(db)
 
 
-def test_del_tree(db):
+def test_del(db):
     del_(db)
+
+
+def test_len(db):
+    len_(db)
 
 
 def test_open_tree(db):
     tree = db.open_tree(b"test")
     assert tree.name == b"test"
-
-
-def test_insert_tree(tree):
-    insert(tree)
 
 
 def test_get_tree(tree):
@@ -80,6 +80,10 @@ def test_contains_tree(tree):
 
 def test_del_tree(tree):
     del_(tree)
+
+
+def test_len_tree(tree):
+    len_(tree)
 
 
 def test_drop_tree(db):
@@ -138,3 +142,9 @@ def del_(tree):
 
     del tree[b"alice"]
     assert b"alice" not in tree
+
+
+def len_(tree):
+    assert len(tree) == 0
+    tree.insert(b"alice", b"10")
+    assert len(tree) == 1
