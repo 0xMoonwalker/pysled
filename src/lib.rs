@@ -37,6 +37,25 @@ pub struct CompareAndSwapError {
     pub proposed: Option<Py<PyBytes>>,
 }
 
+#[pyclass]
+struct SledIter {
+    inner: sled::Iter,
+}
+
+#[pymethods]
+impl SledIter {
+    fn __iter__(slf: PyRef<'_, Self>) -> PyRef<'_, Self> {
+        slf
+    }
+
+    fn __next__(mut slf: PyRefMut<'_, Self>) -> PyResult<Option<(Py<PyBytes>, Py<PyBytes>)>> {
+        match slf.inner.next().transpose() {
+            Err(err) => Err(to_pyerr(err)),
+            Ok(tuple) => Ok(tuple.map(|(k, v)| (to_bytes(k), to_bytes(v)))),
+        }
+    }
+}
+
 macro_rules! impl_tree_methods {
     ($name:ident) => {
         #[pymethods]
@@ -120,11 +139,18 @@ macro_rules! impl_tree_methods {
             pub fn __delitem__(&self, key: &[u8]) -> PyResult<()> {
                 self.remove(key).map(|_| ())
             }
+
+            fn __iter__(slf: PyRef<'_, Self>) -> PyResult<Py<SledIter>> {
+                let iter = SledIter {
+                    inner: slf.inner.iter(),
+                };
+                Py::new(slf.py(), iter)
+            }
         }
     };
 }
 
-#[pyclass(subclass)]
+#[pyclass(subclass, mapping)]
 pub struct SledDb {
     inner: Db,
 }
