@@ -190,7 +190,6 @@ pub struct SledTree {
 
 impl_tree_methods!(SledTree);
 
-
 /// A Python module implemented in Rust.
 #[pymodule]
 fn pysled(_py: Python, m: &PyModule) -> PyResult<()> {
