@@ -196,6 +196,8 @@ impl_tree_methods!(SledTree);
 fn pysled(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<SledDb>()?;
     m.add_class::<SledTree>()?;
+    m.add_class::<SledIter>()?;
+    m.add_class::<CompareAndSwapError>()?;
     m.add("PySledError", _py.get_type::<PySledError>())?;
     Ok(())
 }
