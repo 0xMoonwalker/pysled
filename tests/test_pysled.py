@@ -1,5 +1,5 @@
 import pytest
-from pysled import SledDb, SledIter
+from pysled import SledDb, SledIter, SledBatch
 
 
 @pytest.fixture
@@ -53,6 +53,15 @@ def test_len(db):
     len_(db)
 
 
+def test_batch_insert(db):
+    batch_insert(db)
+
+
+@pytest.mark.skip
+def test_batch_insert_dict(db):
+    batch_insert_dict(db)
+
+
 def test_open_tree(db):
     tree = db.open_tree(b"test")
     assert tree.name == b"test"
@@ -84,6 +93,15 @@ def test_del_tree(tree):
 
 def test_len_tree(tree):
     len_(tree)
+
+
+def test_batch_insert_tree(tree):
+    batch_insert(tree)
+
+
+@pytest.mark.skip
+def test_batch_insert_dict_tree(tree):
+    batch_insert_dict(tree)
 
 
 def test_drop_tree(db):
@@ -148,3 +166,26 @@ def len_(tree):
     assert len(tree) == 0
     tree.insert(b"alice", b"10")
     assert len(tree) == 1
+
+
+def batch_insert(tree):
+    batch = SledBatch()
+    batch.insert(b"alice", b"10")
+    batch.insert(b"bob", b"20")
+    batch.insert(b"carol", b"30")
+
+    tree.apply_batch(batch)
+
+    assert tree[b"alice"] == b"10"
+    assert tree[b"bob"] == b"20"
+    assert tree[b"carol"] == b"30"
+
+
+def batch_insert_dict(tree):
+    batch = {b"alice": b"10", b"bob": b"20", b"carol": b"30"}
+
+    tree.apply_batch(batch)
+
+    assert tree[b"alice"] == b"10"
+    assert tree[b"bob"] == b"20"
+    assert tree[b"carol"] == b"30"

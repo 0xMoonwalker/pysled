@@ -1,12 +1,11 @@
-use std::path::PathBuf;
-
 use pyo3::{
     create_exception,
     exceptions::{PyRuntimeError, PyValueError},
     prelude::*,
     types::PyBytes,
 };
-use sled::{Db, IVec, Tree};
+use sled::{Batch, Db, IVec, Iter, Tree};
+use std::path::PathBuf;
 
 create_exception!(pysled, PySledError, PyRuntimeError);
 
@@ -39,7 +38,7 @@ pub struct CompareAndSwapError {
 
 #[pyclass]
 struct SledIter {
-    inner: sled::Iter,
+    inner: Iter,
 }
 
 #[pymethods]
@@ -53,6 +52,47 @@ impl SledIter {
             Err(err) => Err(to_pyerr(err)),
             Ok(tuple) => Ok(tuple.map(|(k, v)| (to_bytes(k), to_bytes(v)))),
         }
+    }
+}
+
+#[pyclass]
+pub struct SledBatch {
+    pub(crate) inner: Batch,
+}
+
+#[pymethods]
+impl SledBatch {
+    #[new]
+    pub fn new() -> Self {
+        Self {
+            inner: Batch::default(),
+        }
+    }
+    pub fn insert(&mut self, key: &[u8], value: Vec<u8>) {
+        self.inner.insert(key, value)
+    }
+    pub fn remove(&mut self, key: &[u8]) {
+        self.inner.remove(key)
+    }
+}
+
+// impl<'source> FromPyObject<'source> for SledBatch {
+//     fn extract(map: &'source PyAny) -> PyResult<Self> {
+//         let mut self_ = Self::new();
+//         for (key, value) in map.downcast::<PyDict>()? {
+//             self_.insert(
+//                 key.downcast::<PyBytes>()?.extract()?,
+//                 value.downcast::<PyBytes>()?.extract()?,
+//             )
+//         }
+
+//         Ok(self_)
+//     }
+// }
+
+impl Default for SledBatch {
+    fn default() -> Self {
+        SledBatch::new()
     }
 }
 
@@ -109,6 +149,12 @@ macro_rules! impl_tree_methods {
 
             pub fn flush(&self) -> PyResult<usize> {
                 self.inner.flush().map_err(to_pyerr)
+            }
+
+            pub fn apply_batch(&self, batch: &SledBatch) -> PyResult<()> {
+                self.inner
+                    .apply_batch(batch.inner.clone())
+                    .map_err(to_pyerr)
             }
 
             #[getter]
@@ -196,6 +242,7 @@ fn pysled(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<SledDb>()?;
     m.add_class::<SledTree>()?;
     m.add_class::<SledIter>()?;
+    m.add_class::<SledBatch>()?;
     m.add_class::<CompareAndSwapError>()?;
     m.add("PySledError", _py.get_type::<PySledError>())?;
     Ok(())
