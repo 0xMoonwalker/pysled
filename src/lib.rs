@@ -37,7 +37,7 @@ pub struct CompareAndSwapError {
 }
 
 #[pyclass]
-struct SledIter {
+pub struct SledIter {
     inner: Iter,
 }
 
@@ -68,9 +68,11 @@ impl SledBatch {
             inner: Batch::default(),
         }
     }
+
     pub fn insert(&mut self, key: &[u8], value: Vec<u8>) {
         self.inner.insert(key, value)
     }
+
     pub fn remove(&mut self, key: &[u8]) {
         self.inner.remove(key)
     }
@@ -186,7 +188,7 @@ macro_rules! impl_tree_methods {
                 self.remove(key).map(|_| ())
             }
 
-            fn __iter__(slf: PyRef<'_, Self>) -> PyResult<Py<SledIter>> {
+            pub fn __iter__(slf: PyRef<'_, Self>) -> PyResult<Py<SledIter>> {
                 let iter = SledIter {
                     inner: slf.inner.iter(),
                 };
